@@ -1,3 +1,5 @@
 from django.contrib import admin
 
-# Register your models here.
+from noisemapper.models import Profile
+
+admin.site.register(Profile)
