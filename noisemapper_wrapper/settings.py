@@ -64,10 +64,15 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'noisemapper.utils.settings_exposer_context_processor',
             ],
         },
     },
 ]
+
+EXPOSED_TO_TEMPLATES = {
+    'GOOGLE_MAPS_API_KEY': os.environ.get('GOOGLE_MAPS_API_KEY', ''),
+}
 
 WSGI_APPLICATION = 'noisemapper_wrapper.wsgi.application'
 
