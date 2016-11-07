@@ -1,4 +1,5 @@
 import datetime as dt
+import decimal as dec
 
 
 __all__ = ('sjs',)
@@ -26,6 +27,11 @@ sjs = SmartJsonSerializer()
 @sjs.register(dt.datetime)
 def _datetime_processor(obj: dt.datetime):
     return obj.strftime('%Y-%m-%d %H:%M:%S')
+
+
+@sjs.register(dec.Decimal)
+def _decimal_processor(obj: dec.Decimal):
+    return str(obj)
 
 
 def settings_exposer_context_processor(request):

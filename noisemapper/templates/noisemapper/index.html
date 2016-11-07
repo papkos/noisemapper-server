@@ -16,6 +16,7 @@
     <script>
 
         var noiseData = {{ noise_data|safe }};
+        var clusteredData = {{ clustered_data|safe }};
 
         var map;
         var heatmap;
@@ -28,7 +29,8 @@
                 mapTypeId: 'terrain',
             });
 
-            processData(noiseData);
+{#            processData(noiseData);#}
+            processClustered(clusteredData);
         }
 
         function processData(results) {
@@ -38,7 +40,26 @@
                 var latLng = new google.maps.LatLng(coords.lon, coords.lat);
                 var weightedLoc = {
                     location: latLng,
-                    weight: results[i].avg,
+                    weight: results[i].display,
+                };
+                heatmapData.push(weightedLoc);
+            }
+            heatmap = new google.maps.visualization.HeatmapLayer({
+                data: heatmapData,
+                dissipating: true,
+                radius: 20,
+                map: map
+            });
+        }
+
+        function processClustered(clustered) {
+            var heatmapData = [];
+            for (var i = 0; i < clustered.length; i++) {
+                var coords = clustered[i].coordinates;
+                var latLng = new google.maps.LatLng(coords.lon, coords.lat);
+                var weightedLoc = {
+                    location: latLng,
+                    weight: clustered[i].display,
                 };
                 heatmapData.push(weightedLoc);
             }
