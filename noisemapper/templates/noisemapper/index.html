@@ -15,9 +15,6 @@
 
     <script>
 
-        var noiseData = {{ noise_data|safe }};
-        var clusteredData = {{ clustered_data|safe }};
-
         var map;
         var heatmap;
 
@@ -29,46 +26,13 @@
                 mapTypeId: 'terrain',
             });
 
-{#            processData(noiseData);#}
-            processClustered(clusteredData);
-        }
-
-        function processData(results) {
-            var heatmapData = [];
-            for (var i = 0; i < results.length; i++) {
-                var coords = results[i].coordinates;
-                var latLng = new google.maps.LatLng(coords.lon, coords.lat);
-                var weightedLoc = {
-                    location: latLng,
-                    weight: results[i].display,
-                };
-                heatmapData.push(weightedLoc);
-            }
             heatmap = new google.maps.visualization.HeatmapLayer({
-                data: heatmapData,
                 dissipating: true,
                 radius: 20,
-                map: map
             });
-        }
 
-        function processClustered(clustered) {
-            var heatmapData = [];
-            for (var i = 0; i < clustered.length; i++) {
-                var coords = clustered[i].coordinates;
-                var latLng = new google.maps.LatLng(coords.lon, coords.lat);
-                var weightedLoc = {
-                    location: latLng,
-                    weight: clustered[i].display,
-                };
-                heatmapData.push(weightedLoc);
-            }
-            heatmap = new google.maps.visualization.HeatmapLayer({
-                data: heatmapData,
-                dissipating: true,
-                radius: 20,
-                map: map
-            });
+            // This will be triggered as soon as the maps shows up. No need to call `reloadData()` manually.
+            map.addListener('bounds_changed', _.debounce(reloadData, 200));
         }
 
         function toggleDissipating() {
@@ -78,17 +42,66 @@
         function updateRadius(newValue) {
             heatmap.set('radius', Number(newValue));
         }
+
+        function handleErrorResponse(response) {
+            console.log("Error response: ", response);
+            alert("Error! See the console");
+        }
+
+        var reloadData = function () {
+            var bounds = map.getBounds().toJSON();
+            var maxOrAvg = $('input[name=max_or_avg]:checked').val();
+            var resolution = $('#resolution').val();
+
+            var data = {
+                maxOrAvg: maxOrAvg,
+                resolution: resolution,
+            };
+            $.extend(data, bounds);
+
+            $.ajax({
+                url: '{% url 'api_get_clustered_data' %}',
+                type: 'GET',
+                data: data,
+                dataType: 'json',
+            }).then(function (response) {
+                if (response.success == true) {
+                    var heatmapData = [];
+                    response.data.forEach(function (dataPoint) {
+                        var coords = dataPoint.coordinates;
+                        var latLng = new google.maps.LatLng(coords.lon, coords.lat);
+                        var weightedLoc = {
+                            location: latLng,
+                            weight: dataPoint.display,
+                        };
+                        heatmapData.push(weightedLoc);
+                    });
+                    heatmap.setData(heatmapData);
+                    heatmap.setMap(map);
+                    $('#raw-data').text(JSON.stringify(response.data, null, 2));
+                } else {
+                    handleErrorResponse(repsonse);
+                }
+            });
+        };
     </script>
     <script async defer
             src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&libraries=visualization&callback=initMap">
     </script>
-{% endblock extra_js%}
+{% endblock extra_js %}
 
 {% block content %}
-	<div class="container">
+    <div class="container">
         <div id="map"></div>
         <button onclick="toggleDissipating()">Toggle Heatmap</button>
         <label>Radius: <input type="number" onchange="updateRadius(this.value)"/></label>
-        <pre>{{ clustered_display|safe }}</pre>
-	</div>
+        <div>
+            <label><input type="radio" name="max_or_avg" value="max" checked>MAX</label>
+            <label><input type="radio" name="max_or_avg" value="avg">AVG</label>
+        </div>
+        <label>Resolution: <input type="number" id="resolution" value="0.0001"/></label>
+        <button onclick="reloadData()">Reload data</button>
+
+        <pre id="raw-data">{{ clustered_display|safe }}</pre>
+    </div>
 {% endblock %}
