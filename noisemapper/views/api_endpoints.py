@@ -63,9 +63,29 @@ def map_values(values, lower, higher, getter, setter) -> None:
         setter(obj, new_val)
 
 
+def func_sum(iterable):
+    return sum(iterable)
+
+
+def func_avg(iterable):
+    return sum(iterable) / len(iterable)
+
+
+def func_max(iterable):
+    return max(iterable)
+
+
+FUNCS = {
+    'sum': (lambda it: sum(it)),
+    'avg': (lambda it: sum(it) / len(it)),
+    'max': (lambda it: max(it)),
+}
+
+
 def api_get_clustered_data(request):
     max_or_avg = request.GET['maxOrAvg']
     resolution = dec.Decimal(request.GET['resolution'])
+    func = FUNCS[request.GET['func']]
 
     def _calc_key(loc: dict) -> (dec.Decimal, dec.Decimal):
         lat = dec.Decimal(loc['lat']).quantize(resolution, dec.ROUND_HALF_UP)
@@ -93,8 +113,8 @@ def api_get_clustered_data(request):
 
     clustered2 = []
     for key, datas in clustered.items():
-        avg_avg = sum([data['avg'] for data in datas]) / len(datas)
-        avg_max = sum([data['max'] for data in datas]) / len(datas)
+        avg_avg = func([data['avg'] for data in datas])
+        avg_max = func([data['max'] for data in datas])
         clustered2.append({
             'coordinates': {'lat': key[0], 'lon': key[1]},
             'avg': avg_avg,

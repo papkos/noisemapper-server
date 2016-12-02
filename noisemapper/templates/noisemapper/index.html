@@ -48,14 +48,20 @@
             alert("Error! See the console");
         }
 
+        $('.reload-on-change').on('change', function () {
+            reloadData();
+        });
+
         var reloadData = function () {
             var bounds = map.getBounds().toJSON();
             var maxOrAvg = $('input[name=max_or_avg]:checked').val();
             var resolution = $('#resolution').val();
+            var func = $('#func').val();
 
             var data = {
                 maxOrAvg: maxOrAvg,
                 resolution: resolution,
+                func: func,
             };
             $.extend(data, bounds);
 
@@ -95,11 +101,20 @@
         <div id="map"></div>
         <button onclick="toggleDissipating()">Toggle Heatmap</button>
         <label>Radius: <input type="number" onchange="updateRadius(this.value)"/></label>
+
         <div>
-            <label><input type="radio" name="max_or_avg" value="max" checked>MAX</label>
-            <label><input type="radio" name="max_or_avg" value="avg">AVG</label>
+            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="max" checked>MAX</label>
+            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="avg">AVG</label>
         </div>
-        <label>Resolution: <input type="number" id="resolution" value="0.0001"/></label>
+        <label>
+            Aggregation function:
+            <select class="reload-on-change"  id="func" name="func">
+                <option value="sum">SUM</option>
+                <option value="avg">AVG</option>
+                <option value="max">MAX</option>
+            </select>
+        </label>
+        <label>Resolution: <input type="number" class="reload-on-change" id="resolution" value="0.0001"/></label>
         <button onclick="reloadData()">Reload data</button>
 
         <pre id="raw-data">{{ clustered_display|safe }}</pre>
