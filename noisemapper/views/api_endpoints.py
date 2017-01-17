@@ -3,15 +3,14 @@ import decimal as dec
 from json import loads, dumps
 
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 from noisemapper.models.recording import Recording
-from noisemapper.utils import sjs
+from noisemapper.utils import sjs, api_protect
 
-__all__ = ('api_upload_recording', 'api_get_clustered_data', 'api_manual')
+__all__ = ('api_upload_recording', 'api_get_clustered_data', 'api_manual', 'api_echo')
 
 
-@csrf_exempt
+@api_protect
 def api_upload_recording(request):
     if request.method == 'POST':
         data = loads(request.body.decode("utf-8"))
@@ -133,5 +132,12 @@ def api_get_clustered_data(request):
     return JsonResponse(data, json_dumps_params=dict(default=sjs))
 
 
+@api_protect
 def api_manual(request):
     return "Not implemented"
+
+
+@api_protect
+def api_echo(request):
+    data = loads(request.body.decode("utf-8"))
+    return HttpResponse(status=200, content=dumps(data))

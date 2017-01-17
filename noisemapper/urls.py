@@ -9,4 +9,5 @@ urlpatterns = [
     url(r'^api/get_clustered_data/$', views.api_get_clustered_data, name='api_get_clustered_data'),
 
     url(r'^api/manual', views.api_manual),
+    url(r'^api/echo', views.api_echo),
 ]

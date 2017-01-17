@@ -1,6 +1,11 @@
+import base64
 import datetime as dt
 import decimal as dec
+from functools import wraps
 
+from django.conf import settings
+from django.http.response import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 
 __all__ = ('sjs',)
 
@@ -44,3 +49,31 @@ def settings_exposer_context_processor(request):
         defaults.update(exposed)
 
     return defaults
+
+
+def api_protect(function=None):
+    """
+    Decorator for views that are API-usage only. Checks for the custom
+    HTTP header ``X-Noisemapper-Api-Auth`` and its value, which should match
+    the settings.API_SECRET value.
+    Also switches off CSRF protection for the view.
+    """
+
+    api_secret = settings.API_SECRET
+
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            api_auth = request.META.get('HTTP_X_NOISEMAPPER_API_AUTH', '')
+            if api_auth:
+                api_auth = base64.b64decode(api_auth).decode('utf-8')
+            if api_auth == api_secret:
+                return view_func(request, *args, **kwargs)
+
+            else:
+                return HttpResponse(status=401, content="Unauthorized!")
+        return _wrapped_view
+
+    if function:
+        return decorator(csrf_exempt(function))
+    return csrf_exempt(decorator)
