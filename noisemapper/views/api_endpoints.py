@@ -1,5 +1,6 @@
 import datetime as dt
 import decimal as dec
+import logging
 from json import loads, dumps
 
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
@@ -7,7 +8,7 @@ from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonRespo
 from noisemapper.models.recording import Recording
 from noisemapper.utils import sjs, api_protect
 
-__all__ = ('api_upload_recording', 'api_get_clustered_data', 'api_manual', 'api_echo')
+__all__ = ('api_upload_recording', 'api_upload_recording_batch', 'api_get_clustered_data', 'api_manual', 'api_echo')
 
 
 @api_protect
@@ -28,6 +29,21 @@ def api_upload_recording(request):
         response = dict(
             success=True,
             server_id=recording.pk,
+        )
+        return HttpResponse(dumps(response, default=sjs))
+    else:
+        return HttpResponseNotAllowed(['POST'])
+
+
+@api_protect
+def api_upload_recording_batch(request):
+    if request.method == 'POST':
+        data = loads(request.body.decode("utf-8"))
+        logging.debug(dumps(data)[0:1000])
+
+        response = dict(
+            success=True,
+            uuids_processed=['1', '2'],
         )
         return HttpResponse(dumps(response, default=sjs))
     else:
