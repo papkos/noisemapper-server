@@ -1,8 +1,11 @@
+import base64
 import datetime as dt
 import decimal as dec
 import logging
+import os
 from json import loads, dumps
 
+from django.conf import settings
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
 
 from noisemapper.models.recording import Recording
@@ -32,6 +35,10 @@ def _create_recording(json_data) -> Recording:
     location = json_data['state']['location']
 
     recording = Recording()
+
+    if 'uuid' in json_data:
+        recording.uuid = json_data['uuid']
+
     recording.timestamp = dt.datetime.strptime(json_data['timestamp'], '%Y-%m-%d %H:%M:%S')
     recording.process_result = dumps(json_data['processResult'], default=sjs)
     recording.device_state = dumps(json_data['state'], default=sjs)
@@ -50,6 +57,16 @@ def api_upload_recording_batch(request):
         for processed_record in data:
             recording = _create_recording(processed_record)
             recording.save()
+
+            if 'file' in processed_record:
+                try:
+                    full_filename = settings.FILENAME_PATTERN % recording.uuid
+                    full_filename = os.path.join(settings.SNIPPET_STORAGE_DIR, full_filename)
+                    with open(full_filename, "wb") as fh:
+                        fh.write(base64.b64decode(processed_record['file']))
+                except:
+                    logging.exception("Couldn't decode or save the uploaded file for %s" % recording.uuid)
+
             uuids_processed.append(recording.uuid)
 
         response = dict(

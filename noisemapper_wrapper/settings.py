@@ -129,6 +129,11 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, "static/")
 
+SNIPPET_STORAGE_DIR = os.environ.get('SNIPPET_STORAGE_DIR', 'media/')
+os.mkdir(SNIPPET_STORAGE_DIR)
+
+FILENAME_PATTERN = '%s.3gp'
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
