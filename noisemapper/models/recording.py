@@ -8,6 +8,8 @@ __all__ = ('Recording',)
 
 class Recording(NoiseMapperBase, models.Model):
 
+    uuid = models.CharField(max_length=36, blank=True, null=True)
+
     timestamp = models.DateTimeField()
     process_result = models.TextField()
     device_state = models.TextField(blank=True, null=True)

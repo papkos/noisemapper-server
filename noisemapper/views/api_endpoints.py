@@ -16,14 +16,7 @@ def api_upload_recording(request):
     if request.method == 'POST':
         data = loads(request.body.decode("utf-8"))
 
-        location = data['state']['location']
-
-        recording = Recording()
-        recording.timestamp = dt.datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S')
-        recording.process_result = dumps(data['processResult'], default=sjs)
-        recording.device_state = dumps(data['state'], default=sjs)
-        recording.lat = float(location['lat'])
-        recording.lon = float(location['lon'])
+        recording = _create_recording(data)
         recording.save()
 
         response = dict(
@@ -35,15 +28,33 @@ def api_upload_recording(request):
         return HttpResponseNotAllowed(['POST'])
 
 
+def _create_recording(json_data) -> Recording:
+    location = json_data['state']['location']
+
+    recording = Recording()
+    recording.timestamp = dt.datetime.strptime(json_data['timestamp'], '%Y-%m-%d %H:%M:%S')
+    recording.process_result = dumps(json_data['processResult'], default=sjs)
+    recording.device_state = dumps(json_data['state'], default=sjs)
+    recording.lat = float(location['lat'])
+    recording.lon = float(location['lon'])
+    return recording
+
+
 @api_protect
 def api_upload_recording_batch(request):
     if request.method == 'POST':
         data = loads(request.body.decode("utf-8"))
-        logging.debug(dumps(data)[0:1000])
+        logging.info("Received %d ProcessedRecords" % len(data))
+
+        uuids_processed = []
+        for processed_record in data:
+            recording = _create_recording(processed_record)
+            recording.save()
+            uuids_processed.append(recording.uuid)
 
         response = dict(
             success=True,
-            uuids_processed=['1', '2'],
+            uuids_processed=uuids_processed,
         )
         return HttpResponse(dumps(response, default=sjs))
     else:
