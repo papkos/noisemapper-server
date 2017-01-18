@@ -6,6 +6,7 @@ import os
 from json import loads, dumps
 
 from django.conf import settings
+from django.http.request import HttpRequest
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
 
 from noisemapper.models.recording import Recording
@@ -16,10 +17,13 @@ __all__ = ('api_upload_recording', 'api_upload_recording_batch', 'api_get_cluste
 
 @api_protect
 def api_upload_recording(request):
+    device_name = _get_device_name(request)
+
     if request.method == 'POST':
         data = loads(request.body.decode("utf-8"))
 
         recording = _create_recording(data)
+        recording.device_name = device_name
         recording.save()
 
         response = dict(
@@ -47,8 +51,18 @@ def _create_recording(json_data) -> Recording:
     return recording
 
 
+def _get_device_name(request: HttpRequest) -> str:
+    device_name = request.META.get('HTTP_X_NOISEMAPPER_API_DEVICE_NAME', '')
+    if device_name:
+        device_name = base64.b64decode(device_name).decode('utf-8')
+
+    return device_name
+
+
 @api_protect
 def api_upload_recording_batch(request):
+    device_name = _get_device_name(request)
+
     if request.method == 'POST':
         data = loads(request.body.decode("utf-8"))
         logging.info("Received %d ProcessedRecords" % len(data))
@@ -56,6 +70,7 @@ def api_upload_recording_batch(request):
         uuids_processed = []
         for processed_record in data:
             recording = _create_recording(processed_record)
+            recording.device_name = device_name
             recording.save()
 
             if 'file' in processed_record:
