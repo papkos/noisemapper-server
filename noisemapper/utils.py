@@ -1,6 +1,7 @@
 import base64
 import datetime as dt
 import decimal as dec
+import logging
 from functools import wraps
 
 from django.conf import settings
@@ -64,16 +65,39 @@ def api_protect(function=None):
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
-            api_auth = request.META.get('HTTP_X_NOISEMAPPER_API_AUTH', '')
-            if api_auth:
-                api_auth = base64.b64decode(api_auth).decode('utf-8')
-            if api_auth == api_secret:
-                return view_func(request, *args, **kwargs)
+            try:
+                api_auth = request.META.get('HTTP_X_NOISEMAPPER_API_AUTH', '')
+                if api_auth:
+                    api_auth = base64.b64decode(api_auth).decode('utf-8')
+                if api_auth == api_secret:
+                    logging.info("Auth'd request to %s" % request.path_info)
+                    return view_func(request, *args, **kwargs)
 
-            else:
+            except Exception as e:
+                logging.exception("Unauthorized request to %s" % request.path_info)
                 return HttpResponse(status=401, content="Unauthorized!")
+
         return _wrapped_view
 
     if function:
         return decorator(csrf_exempt(function))
     return csrf_exempt(decorator)
+
+
+class RequestLoggerMiddleware(object):
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # One-time configuration and initialization.
+
+    def __call__(self, request):
+        # Code to be executed for each request before
+        # the view (and later middleware) are called.
+
+        logging.info("Processing request to %s" % request.path_info)
+
+        response = self.get_response(request)
+
+        # Code to be executed for each request/response after
+        # the view is called.
+
+        return response
