@@ -12,6 +12,16 @@ https://docs.djangoproject.com/en/1.10/ref/settings/
 
 import os
 
+
+def _get_django_default(setting_name, fallback=None):
+    try:
+        from django.conf import global_settings
+        ret = getattr(global_settings, setting_name, fallback)
+        return ret
+    except:
+        return fallback
+
+
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -134,6 +144,10 @@ if not os.path.exists(SNIPPET_STORAGE_DIR):
     os.mkdir(SNIPPET_STORAGE_DIR)
 
 FILENAME_PATTERN = '%s.3gp'
+
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = os.environ.get('MAX_POST_PAYLOAD',
+                                             _get_django_default('DATA_UPLOAD_MAX_MEMORY_SIZE', 2621440))  # i.e. 2.5 MB
 
 LOGGING = {
     'version': 1,
