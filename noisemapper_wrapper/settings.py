@@ -146,8 +146,11 @@ if not os.path.exists(SNIPPET_STORAGE_DIR):
 FILENAME_PATTERN = '%s.3gp'
 
 
-DATA_UPLOAD_MAX_MEMORY_SIZE = os.environ.get('MAX_POST_PAYLOAD',
-                                             _get_django_default('DATA_UPLOAD_MAX_MEMORY_SIZE', 2621440))  # i.e. 2.5 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(
+    os.environ.get('MAX_POST_PAYLOAD',
+                   _get_django_default('DATA_UPLOAD_MAX_MEMORY_SIZE',
+                                       2621440))  # i.e. 2.5 MB
+)
 
 LOGGING = {
     'version': 1,
