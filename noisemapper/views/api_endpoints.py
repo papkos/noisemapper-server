@@ -185,7 +185,7 @@ def api_get_clustered_data(request):
     if len(clustered2) > 0:
         def setter(obj, val):
             obj['display'] = val
-        map_values(clustered2, 1, 2, lambda x: x[max_or_avg], setter)
+        map_values(clustered2, 2, 3, lambda x: x[max_or_avg], setter)
 
     data = dict(
         success=True,
