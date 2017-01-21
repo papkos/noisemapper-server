@@ -6,6 +6,7 @@ import os
 from json import loads, dumps
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.http.request import HttpRequest
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
 
@@ -140,6 +141,7 @@ FUNCS = {
 }
 
 
+@login_required
 def api_get_clustered_data(request):
     max_or_avg = request.GET['maxOrAvg']
     resolution = dec.Decimal(request.GET['resolution'])

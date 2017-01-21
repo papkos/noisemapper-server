@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'widget_tweaks',
+
     'noisemapper.apps.NoisemapperConfig',
 ]
 
@@ -65,10 +67,13 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'noisemapper_wrapper.urls'
 
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'index'
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': ['noisemapper_wrapper/templates/noisemapper_wrapper'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
