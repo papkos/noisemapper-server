@@ -13,7 +13,9 @@ from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonRespo
 from noisemapper.models.recording import Recording
 from noisemapper.utils import sjs, api_protect
 
-__all__ = ('api_upload_recording', 'api_upload_recording_batch', 'api_get_clustered_data', 'api_manual', 'api_echo')
+__all__ = ('api_upload_recording', 'api_upload_recording_batch',
+           'api_get_clustered_data', 'api_get_nonclustered_data',
+           'api_manual', 'api_echo')
 
 
 @api_protect
@@ -188,6 +190,43 @@ def api_get_clustered_data(request):
     data = dict(
         success=True,
         data=clustered2,
+    )
+
+    return JsonResponse(data, json_dumps_params=dict(default=sjs))
+
+
+@login_required
+def api_get_nonclustered_data(request):
+    max_or_avg = request.GET['maxOrAvg']
+
+    filter_criteria = dict(
+        lat__gt=float(request.GET['south']),
+        lat__lt=float(request.GET['north']),
+        lon__gt=float(request.GET['west']),
+        lon__lt=float(request.GET['east']),
+    )
+
+    data = []
+    q = Recording.objects.filter(**filter_criteria)
+    for recording in q:
+        state = loads(recording.device_state)
+        location = state['location']
+        values = loads(recording.process_result)
+
+        data.append({
+            'coordinates': {'lat': location['lat'], 'lon': location['lon']},
+            'avg': values['avg'],
+            'max': values['max'],
+        })
+
+    if len(data) > 0:
+        def setter(obj, val):
+            obj['display'] = val
+        map_values(data, 2, 3, lambda x: x[max_or_avg], setter)
+
+    data = dict(
+        success=True,
+        data=data,
     )
 
     return JsonResponse(data, json_dumps_params=dict(default=sjs))

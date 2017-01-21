@@ -1,4 +1,5 @@
 {% extends 'noisemapper/base.html' %}
+{% load static %}
 {% block title %}{{ block.super }} - Index{% endblock %}
 
 {% block extra_css %}
@@ -12,6 +13,13 @@
 {% endblock extra_css %}
 
 {% block extra_js %}
+    <script
+            {#            src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&libraries=visualization&callback=initMap">#}
+            src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&libraries=visualization">
+    </script>
+
+    <script  src="{% static 'noisemapper/lib/heatmap-js/heatmap.js' %}"></script>
+    <script  src="{% static 'noisemapper/lib/heatmap-js/gmaps-heatmap.js' %}"></script>
 
     <script>
 
@@ -26,17 +34,34 @@
                 mapTypeId: 'terrain',
             });
 
-            heatmap = new google.maps.visualization.HeatmapLayer({
-                dissipating: true,
-                radius: 20,
-            });
+            //heatmap layer
+            heatmap = new HeatmapOverlay(map,
+                {
+                    // radius should be small ONLY if scaleRadius is true (or small radius is intended)
+{#                    "radius": 0.0005,#}
+                    // scales the radius based on map zoom
+{#                    "scaleRadius": true,#}
+                    "radius": 20,
+                    "maxOpacity": 1,
+                    // if set to false the heatmap uses the global maximum for colorization
+                    // if activated: uses the data maximum within the current map boundaries
+                    //   (there will always be a red spot with useLocalExtremas true)
+                    "useLocalExtrema": false,
+                    // which field name in your data represents the latitude - default "lat"
+                    latField: 'lon',
+                    // which field name in your data represents the longitude - default "lng"
+                    lngField: 'lat',
+                    // which field name in your data represents the data value - default "value"
+                    valueField: 'weight',
+                }
+            );
 
             // This will be triggered as soon as the maps shows up. No need to call `reloadData()` manually.
             map.addListener('bounds_changed', _.debounce(reloadData, 200));
         }
 
         function toggleDissipating() {
-            heatmap.set('dissipating', heatmap.get('dissipating') ? false : true);
+{#            heatmap.set('dissipating', heatmap.get('dissipating') ? false : true);#}
         }
 
         function updateRadius(newValue) {
@@ -66,7 +91,7 @@
             $.extend(data, bounds);
 
             $.ajax({
-                url: '{% url 'api_get_clustered_data' %}',
+                url: '{% url 'api_get_nonclustered_data' %}',
                 type: 'GET',
                 data: data,
                 dataType: 'json',
@@ -78,21 +103,21 @@
                         var latLng = new google.maps.LatLng(coords.lon, coords.lat);
                         var weightedLoc = {
                             location: latLng,
+                            lat: coords.lat,
+                            lon: coords.lon,
                             weight: dataPoint.display,
                         };
                         heatmapData.push(weightedLoc);
                     });
-                    heatmap.setData(heatmapData);
-                    heatmap.setMap(map);
+                    heatmap.setData({data: heatmapData, min: 1, max: 4});
                     $('#raw-data').text(JSON.stringify(response.data, null, 2));
                 } else {
                     handleErrorResponse(repsonse);
                 }
             });
         };
-    </script>
-    <script async defer
-            src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&libraries=visualization&callback=initMap">
+
+        $(initMap);
     </script>
 {% endblock extra_js %}
 
@@ -103,8 +128,8 @@
         <label>Radius: <input type="number" onchange="updateRadius(this.value)"/></label>
 
         <div>
-            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="max" checked>MAX</label>
-            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="avg">AVG</label>
+            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="max">MAX</label>
+            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="avg" checked>AVG</label>
         </div>
         <label>
             Aggregation function:
