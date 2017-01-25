@@ -3,6 +3,8 @@
 {% block title %}{{ block.super }} - Index{% endblock %}
 
 {% block extra_css %}
+    <link rel="stylesheet" type="text/css" href="{% static 'noisemapper/lib/datatables-1.10.13/datatables.css' %}"/>
+
     <style type="text/css">
 
         #map {
@@ -20,6 +22,8 @@
 
     <script  src="{% static 'noisemapper/lib/heatmap-js/heatmap.js' %}"></script>
     <script  src="{% static 'noisemapper/lib/heatmap-js/gmaps-heatmap.js' %}"></script>
+
+    <script type="text/javascript" src="{% static 'noisemapper/lib/datatables-1.10.13/datatables.js' %}"></script>
 
     <script>
 
@@ -48,9 +52,9 @@
                     //   (there will always be a red spot with useLocalExtremas true)
                     "useLocalExtrema": false,
                     // which field name in your data represents the latitude - default "lat"
-                    latField: 'lon',
+                    latField: 'lat',
                     // which field name in your data represents the longitude - default "lng"
-                    lngField: 'lat',
+                    lngField: 'lon',
                     // which field name in your data represents the data value - default "value"
                     valueField: 'weight',
                 }
@@ -73,20 +77,21 @@
             alert("Error! See the console");
         }
 
-        $('.reload-on-change').on('change', function () {
-            reloadData();
-        });
-
         var reloadData = function () {
             var bounds = map.getBounds().toJSON();
             var maxOrAvg = $('input[name=max_or_avg]:checked').val();
             var resolution = $('#resolution').val();
             var func = $('#func').val();
+            
+            var deviceNames = $('.device-name-container input:checked').map(function (idx, el) {
+                return $(el).data('deviceName');
+            }).get().join('|');
 
             var data = {
                 maxOrAvg: maxOrAvg,
                 resolution: resolution,
                 func: func,
+                deviceNames: deviceNames,
             };
             $.extend(data, bounds);
 
@@ -112,19 +117,84 @@
                     });
                     heatmap.setData({data: heatmapData, min: 1, max: 4});
                     $('#raw-data').text(JSON.stringify(response.data, null, 2));
+
+                    rawDataTable.clear()
+                    rawDataTable.rows.add(response.data).draw();
                 } else {
                     handleErrorResponse(repsonse);
                 }
             });
         };
 
-        $(initMap);
+        var markers = [];
+        function addMarker() {
+            var $this = $(this);
+
+            var marker = new google.maps.Marker({
+                position: {lat: $this.data('lat'), lng: $this.data('lon')},
+                map: map,
+                title: 'Hello World!'
+            });
+            markers.push(marker);
+        }
+
+        function _makeMarkerBtn(data, type, full, meta) {
+            var btn = $('<button>')
+                .addClass('btn btn-default btn-add-marker')
+                .text('Add marker')
+{#                .data('coordinates', full.coordinates)#}
+                .attr('data-lat', full.coordinates.lat)
+                .attr('data-lon', full.coordinates.lon)
+                .click(addMarker);
+            return $('<div>').append(btn).html();
+        }
+
+        function clearMarkers() {
+            markers.forEach(function(marker) {marker.setMap(null); })
+            markers = [];
+        }
+
+        var rawDataTable;
+        $(function() {
+            initMap();
+
+            $('.reload-on-change').on('change', function () {
+                reloadData();
+            });
+
+            $('#rawDataTable').on('click', '.btn-add-marker', addMarker);
+
+            rawDataTable = $('#rawDataTable').DataTable({
+                columns: [
+                    { data: "coordinates.lat" },
+                    { data: "coordinates.lon" },
+                    { data: "avg" },
+                    { data: "max" },
+                    { data: "display" },
+                    { data: null, render: _makeMarkerBtn},
+                ]
+
+            });
+        });
     </script>
 {% endblock extra_js %}
 
 {% block content %}
     <div class="container">
         <div id="map"></div>
+
+        <div class="row ">
+            <div class="btn-group device-name-container" data-toggle="buttons">
+                {% for device_name in device_name_list %}
+                    <label class="btn btn-default">
+                        <input type="checkbox" autocomplete="off" class="reload-on-change"
+                               data-device-name="{{ device_name }}">
+                        {{ device_name }}
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
         <button onclick="toggleDissipating()">Toggle Heatmap</button>
         <label>Radius: <input type="number" onchange="updateRadius(this.value)"/></label>
 
@@ -142,6 +212,20 @@
         </label>
         <label>Resolution: <input type="number" class="reload-on-change" id="resolution" value="0.0001"/></label>
         <button onclick="reloadData()">Reload data</button>
+        <button onclick="clearMarkers()">Clear markers</button>
+
+    <table class="table table-bordered table-striped" id="rawDataTable">
+        <thead>
+            <tr>
+                <th>Latitude</th>
+                <th>Longitude</th>
+                <th>AVG</th>
+                <th>MAX</th>
+                <th>Weight</th>
+                <th>Marker</th>
+            </tr>
+        </thead>
+    </table>
 
         <pre id="raw-data">{{ clustered_display|safe }}</pre>
     </div>

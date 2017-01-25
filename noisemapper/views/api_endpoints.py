@@ -1,4 +1,5 @@
 import base64
+import datetime
 import datetime as dt
 import decimal as dec
 import logging
@@ -47,7 +48,10 @@ def _create_recording(json_data) -> Recording:
         recording.uuid = json_data['uuid']
 
     recording.timestamp = dt.datetime.strptime(json_data['timestamp'], '%Y-%m-%d %H:%M:%S')
-    recording.process_result = dumps(json_data['processResult'], default=sjs)
+    process_result = json_data['processResult']
+    recording.process_result = dumps(process_result, default=sjs)
+    recording.measurement_avg = process_result.get('avg', None)
+    recording.measurement_max = process_result.get('max', None)
     recording.device_state = dumps(json_data['state'], default=sjs)
     recording.lat = float(location['lat'])
     recording.lon = float(location['lon'])
@@ -148,6 +152,7 @@ def api_get_clustered_data(request):
     max_or_avg = request.GET['maxOrAvg']
     resolution = dec.Decimal(request.GET['resolution'])
     func = FUNCS[request.GET['func']]
+    device_names = request.GET.get('deviceNames', []).split('|')
 
     def _calc_key(loc: dict) -> (dec.Decimal, dec.Decimal):
         lat = dec.Decimal(loc['lat']).quantize(resolution, dec.ROUND_HALF_UP)
@@ -155,10 +160,19 @@ def api_get_clustered_data(request):
         return lat, lon
 
     filter_criteria = dict(
-        lat__gt=float(request.GET['south']),
-        lat__lt=float(request.GET['north']),
-        lon__gt=float(request.GET['west']),
-        lon__lt=float(request.GET['east']),
+        # lat__gt=float(request.GET['south']),
+        # lat__lt=float(request.GET['north']),
+        # lon__gt=float(request.GET['west']),
+        # lon__lt=float(request.GET['east']),
+    )
+
+    filter_criteria.update(
+        device_name__in=device_names,
+    )
+
+    filter_criteria.update(
+        # 2017-01-24 21:31:09
+        timestamp__gte=datetime.datetime(year=2017, month=1, day=24, hour=20, minute=00),
     )
 
     clustered = {}
@@ -232,9 +246,18 @@ def api_get_nonclustered_data(request):
     return JsonResponse(data, json_dumps_params=dict(default=sjs))
 
 
-@api_protect
+@login_required
 def api_manual(request):
-    return "Not implemented"
+    # cnt = 0
+    # for r in Recording.objects.all():
+    #     results = loads(r.process_result)
+    #     r.measurement_avg = results.get('avg', None)
+    #     r.measurement_max = results.get('max', None)
+    #     r.save()
+    #     cnt += 1
+    # print("Processed %d records" % cnt)
+
+    return HttpResponse("Not implemented")
 
 
 @api_protect

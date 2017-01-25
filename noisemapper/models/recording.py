@@ -19,3 +19,6 @@ class Recording(NoiseMapperBase, models.Model):
 
     uploaded_at = models.DateTimeField(auto_now_add=True)
     misc_data = models.TextField(blank=True, null=True)
+
+    measurement_max = models.FloatField(blank=True, null=True)
+    measurement_avg = models.FloatField(blank=True, null=True)
