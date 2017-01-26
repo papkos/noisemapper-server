@@ -115,7 +115,7 @@
                         };
                         heatmapData.push(weightedLoc);
                     });
-                    heatmap.setData({data: heatmapData, min: 1, max: 4});
+                    heatmap.setData({data: heatmapData, min: 1.9, max: 3.1});
                     $('#raw-data').text(JSON.stringify(response.data, null, 2));
 
                     rawDataTable.clear()
@@ -129,9 +129,13 @@
         var markers = [];
         function addMarker() {
             var $this = $(this);
+            var latLon = {
+                lat: Number.parseFloat($this.data('lat')),
+                lng: Number.parseFloat($this.data('lon')),
+            }
 
             var marker = new google.maps.Marker({
-                position: {lat: $this.data('lat'), lng: $this.data('lon')},
+                position: latLon,
                 map: map,
                 title: 'Hello World!'
             });
@@ -168,10 +172,11 @@
                 columns: [
                     { data: "coordinates.lat" },
                     { data: "coordinates.lon" },
-                    { data: "avg" },
-                    { data: "max" },
+                    { data: "value" },
                     { data: "display" },
                     { data: null, render: _makeMarkerBtn},
+                    { data: 'original', render: function (data) { return data.length; }},
+                    { data: 'original[, ].uuid',},
                 ]
 
             });
@@ -210,7 +215,7 @@
                 <option value="max">MAX</option>
             </select>
         </label>
-        <label>Resolution: <input type="number" class="reload-on-change" id="resolution" value="0.0001"/></label>
+        <label>Resolution: <input type="number" class="reload-on-change" id="resolution" value="100"/></label>
         <button onclick="reloadData()">Reload data</button>
         <button onclick="clearMarkers()">Clear markers</button>
 
@@ -220,9 +225,10 @@
                 <th>Latitude</th>
                 <th>Longitude</th>
                 <th>AVG</th>
-                <th>MAX</th>
                 <th>Weight</th>
                 <th>Marker</th>
+                <th>Count</th>
+                <th>UUIDs</th>
             </tr>
         </thead>
     </table>

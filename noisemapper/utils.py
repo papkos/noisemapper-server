@@ -3,10 +3,14 @@ import datetime as dt
 import decimal as dec
 import logging
 from functools import wraps
+from typing import Callable, Iterable, Any, T, Tuple
 
+import gpxpy.geo
 from django.conf import settings
 from django.http.response import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+
+from noisemapper.models.recording import Recording
 
 __all__ = ('sjs',)
 
@@ -101,3 +105,66 @@ class RequestLoggerMiddleware(object):
         # the view is called.
 
         return response
+
+
+class Aggregator(object):
+    def __call__(self, new):
+        raise NotImplementedError
+
+    def get(self):
+        raise NotImplementedError
+
+
+def cluster_data(data: Iterable[T], key_func: Callable[[T], Any], is_same_func: Callable[[T, T], bool],
+                 aggregator: Aggregator, retain_original=False):
+    clustered = {}
+
+    for datapoint in data:
+        key = key_func(datapoint)
+        for existing_key in clustered.keys():
+            if is_same_func(existing_key, key):
+                key = existing_key
+                break
+        clustered.setdefault(key, []).append(datapoint)
+
+    for key, values in clustered.items():
+        for x in values:
+            aggregator(x)
+        if retain_original:
+            clustered[key] = dict(original=values, aggregated_value=aggregator.get())
+        else:
+            clustered[key] = aggregator.get()
+
+    return clustered
+
+
+def distance(point_a: Tuple[float, float], point_b: Tuple[float, float]) -> float:
+    dist_m = gpxpy.geo.haversine_distance(point_a[0], point_a[1], point_b[0], point_b[1])
+    return dist_m
+
+
+class Averager(Aggregator):
+
+    def __init__(self, extractor):
+        self.count = 0
+        self.sum = 0.0
+        self.extractor = extractor
+
+    def __call__(self, new):
+        self.count += 1
+        self.sum += self.extractor(new)
+        return self
+
+    def get(self):
+        return self.sum / self.count
+
+
+def recording_to_json(recording: Recording) -> dict:
+    return dict(
+        uuid=recording.uuid,
+        lat=recording.lat,
+        lon=recording.lon,
+        avg=recording.measurement_avg,
+        max=recording.measurement_max,
+        device_name=recording.device_name,
+    )

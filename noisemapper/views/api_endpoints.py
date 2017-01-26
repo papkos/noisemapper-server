@@ -12,7 +12,7 @@ from django.http.request import HttpRequest
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
 
 from noisemapper.models.recording import Recording
-from noisemapper.utils import sjs, api_protect
+from noisemapper.utils import sjs, api_protect, cluster_data, distance, Averager, recording_to_json
 
 __all__ = ('api_upload_recording', 'api_upload_recording_batch',
            'api_get_clustered_data', 'api_get_nonclustered_data',
@@ -128,36 +128,10 @@ def map_values(values, lower, higher, getter, setter) -> None:
         setter(obj, new_val)
 
 
-def func_sum(iterable):
-    return sum(iterable)
-
-
-def func_avg(iterable):
-    return sum(iterable) / len(iterable)
-
-
-def func_max(iterable):
-    return max(iterable)
-
-
-FUNCS = {
-    'sum': (lambda it: sum(it)),
-    'avg': (lambda it: sum(it) / len(it)),
-    'max': (lambda it: max(it)),
-}
-
-
 @login_required
 def api_get_clustered_data(request):
-    max_or_avg = request.GET['maxOrAvg']
     resolution = dec.Decimal(request.GET['resolution'])
-    func = FUNCS[request.GET['func']]
     device_names = request.GET.get('deviceNames', []).split('|')
-
-    def _calc_key(loc: dict) -> (dec.Decimal, dec.Decimal):
-        lat = dec.Decimal(loc['lat']).quantize(resolution, dec.ROUND_HALF_UP)
-        lon = dec.Decimal(loc['lon']).quantize(resolution, dec.ROUND_HALF_UP)
-        return lat, lon
 
     filter_criteria = dict(
         # lat__gt=float(request.GET['south']),
@@ -175,35 +149,31 @@ def api_get_clustered_data(request):
         timestamp__gte=datetime.datetime(year=2017, month=1, day=24, hour=20, minute=00),
     )
 
-    clustered = {}
-    for recording in Recording.objects.filter(**filter_criteria):
-        state = loads(recording.device_state)
-        location = state['location']
-        values = loads(recording.process_result)
+    clustered = cluster_data(
+        Recording.objects.filter(**filter_criteria),
+        key_func=(lambda r: (r.lat, r.lon)),
+        is_same_func=(lambda a, b: distance(a, b) < resolution),
+        aggregator=Averager(extractor=(lambda r: r.measurement_avg)),
+        retain_original=True,
+    )
+    clustered = [
+        dict(
+            coordinates={'lat': key[0], 'lon': key[1]},
+            value=value['aggregated_value'],
+            original=[recording_to_json(x) for x in value['original']],
+        )
+        for key, value
+        in clustered.items()
+    ]
 
-        clustered.setdefault(_calc_key(location), []).append({
-            'coordinates': {'lat': location['lat'], 'lon': location['lon']},
-            'avg': values['avg'],
-            'max': values['max'],
-        })
-
-    clustered2 = []
-    for key, datas in clustered.items():
-        avg_avg = func([data['avg'] for data in datas])
-        avg_max = func([data['max'] for data in datas])
-        clustered2.append({
-            'coordinates': {'lat': key[0], 'lon': key[1]},
-            'avg': avg_avg,
-            'max': avg_max,
-        })
-    if len(clustered2) > 0:
+    if len(clustered) > 0:
         def setter(obj, val):
             obj['display'] = val
-        map_values(clustered2, 2, 3, lambda x: x[max_or_avg], setter)
+        map_values(clustered, 2, 3, lambda x: x['value'], setter)
 
     data = dict(
         success=True,
-        data=clustered2,
+        data=clustered,
     )
 
     return JsonResponse(data, json_dumps_params=dict(default=sjs))
