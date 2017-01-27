@@ -24,6 +24,7 @@
     <script  src="{% static 'noisemapper/lib/heatmap-js/gmaps-heatmap.js' %}"></script>
 
     <script type="text/javascript" src="{% static 'noisemapper/lib/datatables-1.10.13/datatables.js' %}"></script>
+    <script type="text/javascript" src="{% static 'noisemapper/lib/geolib.js' %}"></script>
 
     <script>
 
@@ -36,6 +37,10 @@
                 zoom: 12,
                 center: oslo,
                 mapTypeId: 'terrain',
+            });
+
+            map.addListener('click', function(e) {
+                onMapClicked(e.latLng);
             });
 
             //heatmap layer
@@ -75,6 +80,34 @@
         function handleErrorResponse(response) {
             console.log("Error response: ", response);
             alert("Error! See the console");
+        }
+
+        function onMapClicked(latLng) {
+            var minDist = Number.MAX_VALUE;
+            var minIdx = -1;
+            for (var i = 0; i < currentRawData.length; i++) {
+                var dist = geolib.getDistance(
+                    {latitude: latLng.lat(), longitude: latLng.lng()},
+                    {latitude: currentRawData[i].coordinates.lat, longitude: currentRawData[i].coordinates.lon}
+                );
+                if (dist < minDist) {
+                    minDist = dist;
+                    minIdx = i;
+                }
+            }
+
+            if (minIdx != -i) {
+                var infowindow = new google.maps.InfoWindow({
+                    content: '<pre style="user-select: text;">' + JSON.stringify(currentRawData[minIdx], null, 2) + '</pre>',
+                });
+
+                var marker = new google.maps.Marker({
+                    position: {lat: currentRawData[minIdx].coordinates.lat, lng: currentRawData[minIdx].coordinates.lon},
+                    map: map,
+                });
+                infowindow.open(map, marker);
+                markers.push(marker);
+            }
         }
 
         var reloadData = function () {
@@ -117,6 +150,7 @@
                     });
                     heatmap.setData({data: heatmapData, min: 1.9, max: 3.1});
                     $('#raw-data').text(JSON.stringify(response.data, null, 2));
+                    currentRawData = response.data;
 
                     rawDataTable.clear()
                     rawDataTable.rows.add(response.data).draw();
@@ -159,6 +193,7 @@
         }
 
         var rawDataTable;
+        var currentRawData;
         $(function() {
             initMap();
 
