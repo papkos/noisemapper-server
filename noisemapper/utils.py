@@ -108,15 +108,16 @@ class RequestLoggerMiddleware(object):
 
 
 class Aggregator(object):
+
     def __call__(self, new):
         raise NotImplementedError
 
-    def get(self):
+    def get(self) -> Tuple[Any, float]:
         raise NotImplementedError
 
 
 def cluster_data(data: Iterable[T], key_func: Callable[[T], Any], is_same_func: Callable[[T, T], bool],
-                 aggregator: Aggregator, retain_original=False):
+                 aggregator_factory: Callable[[], Aggregator], retain_original=False):
     clustered = {}
 
     for datapoint in data:
@@ -127,15 +128,22 @@ def cluster_data(data: Iterable[T], key_func: Callable[[T], Any], is_same_func: 
                 break
         clustered.setdefault(key, []).append(datapoint)
 
+    clustered_2 = dict()
     for key, values in clustered.items():
+        aggregator = aggregator_factory()  # Create a new one for each cluster
         for x in values:
             aggregator(x)
-        if retain_original:
-            clustered[key] = dict(original=values, aggregated_value=aggregator.get())
-        else:
-            clustered[key] = aggregator.get()
 
-    return clustered
+        new_key, new_value = aggregator.get()
+        if not new_key:
+            # For simple aggregators that don't modify the key
+            new_key = key
+        if retain_original:
+            clustered_2[new_key] = dict(original=values, aggregated_value=new_value)
+        else:
+            clustered_2[new_key] = new_value
+
+    return clustered_2
 
 
 def distance(point_a: Tuple[float, float], point_b: Tuple[float, float]) -> float:
@@ -151,12 +159,53 @@ class Averager(Aggregator):
         self.extractor = extractor
 
     def __call__(self, new):
-        self.count += 1
-        self.sum += self.extractor(new)
+        extracted = self.extractor(new)
+        if isinstance(extracted, tuple):
+            suminc, countinc = extracted
+        else:
+            suminc = extracted
+            countinc = 1
+        self.sum += suminc
+        self.count += countinc
         return self
 
     def get(self):
-        return self.sum / self.count
+        return None, dec.Decimal(self.sum) / dec.Decimal(self.count)
+
+
+class GeoWeightedMiddle(Aggregator):
+
+    def __init__(self, extractor):
+        self.extractor = extractor
+        self.locations = []  # (lat, lon)
+        self.weights = []
+
+    def __call__(self, new):
+        lat, lon, weight = self.extractor(new)
+        self.locations.append((lat, lon))
+        self.weights.append(weight)
+        return self
+
+    def get(self):
+        total_weight = sum(self.weights)
+
+        avg_lat = avg_lon = 0
+        for loc, weight in zip(self.locations, self.weights):
+            avg_lat += loc[0] * weight
+            avg_lon += loc[1] * weight
+        avg_lat = avg_lat / total_weight
+        avg_lon = avg_lon / total_weight
+        geo_mid = (avg_lat, avg_lon)
+
+        avg_val = val_weights = 0
+        for loc, weight in zip(self.locations, self.weights):
+            dist = distance(geo_mid, loc)
+            if dist == 0:
+                dist = 1
+            avg_val += weight * 1 / dist
+            val_weights += 1 / dist
+        avg_val /= val_weights
+        return geo_mid, avg_val
 
 
 def recording_to_json(recording: Recording) -> dict:

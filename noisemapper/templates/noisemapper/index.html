@@ -50,7 +50,7 @@
 {#                    "radius": 0.0005,#}
                     // scales the radius based on map zoom
 {#                    "scaleRadius": true,#}
-                    "radius": 20,
+                    "radius": 35,
                     "maxOpacity": 1,
                     // if set to false the heatmap uses the global maximum for colorization
                     // if activated: uses the data maximum within the current map boundaries
@@ -115,6 +115,8 @@
             var maxOrAvg = $('input[name=max_or_avg]:checked').val();
             var resolution = $('#resolution').val();
             var func = $('#func').val();
+
+            var isClustering = $('input[name=is_clustering]').is(':checked');
             
             var deviceNames = $('.device-name-container input:checked').map(function (idx, el) {
                 return $(el).data('deviceName');
@@ -128,9 +130,15 @@
             };
             $.extend(data, bounds);
 
+            var url;
+            if (isClustering) {
+                url = '{% url 'api_get_clustered_data' %}';
+            } else {
+                url = '{% url 'api_get_nonclustered_data' %}';
+            }
+
             $.ajax({
-                url: '{% url 'api_get_clustered_data' %}',
-{#                url: '{% url 'api_get_nonclustered_data' %}',#}
+                url: url,
                 type: 'GET',
                 data: data,
                 dataType: 'json',
@@ -152,7 +160,7 @@
                     $('#raw-data').text(JSON.stringify(response.data, null, 2));
                     currentRawData = response.data;
 
-                    rawDataTable.clear()
+                    rawDataTable.clear();
                     rawDataTable.rows.add(response.data).draw();
                 } else {
                     handleErrorResponse(repsonse);
@@ -239,8 +247,9 @@
         <label>Radius: <input type="number" onchange="updateRadius(this.value)"/></label>
 
         <div>
-            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="max">MAX</label>
-            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="avg" checked>AVG</label>
+            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="measurement_max">MAX</label>
+            <label><input type="radio" class="reload-on-change" name="max_or_avg" value="measurement_avg" checked>AVG</label>
+            <label><input type="checkbox" class="reload-on-change" name="is_clustering" checked>Enable clustering</label>
         </div>
         <label>
             Aggregation function:
@@ -259,7 +268,7 @@
             <tr>
                 <th>Latitude</th>
                 <th>Longitude</th>
-                <th>AVG</th>
+                <th>Value (AVG / MAX)</th>
                 <th>Weight</th>
                 <th>Marker</th>
                 <th>Count</th>
