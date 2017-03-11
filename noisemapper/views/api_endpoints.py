@@ -128,18 +128,18 @@ def map_values(values, lower, higher, getter, setter) -> None:
         setter(obj, new_val)
 
 
-@login_required
-def api_get_clustered_data(request):
-    resolution = dec.Decimal(request.GET['resolution'])
+def _build_filters(request: HttpRequest):
     device_names = request.GET.get('deviceNames', []).split('|')
-    max_or_avg = request.GET['maxOrAvg']
+    is_cropping = request.GET['is_cropping'] == 'true'
 
-    filter_criteria = dict(
-        # lat__gt=float(request.GET['south']),
-        # lat__lt=float(request.GET['north']),
-        # lon__gt=float(request.GET['west']),
-        # lon__lt=float(request.GET['east']),
-    )
+    filter_criteria = dict()
+    if is_cropping:
+        filter_criteria.update(
+            lat__gt=float(request.GET['south']),
+            lat__lt=float(request.GET['north']),
+            lon__gt=float(request.GET['west']),
+            lon__lt=float(request.GET['east']),
+        )
 
     filter_criteria.update(
         device_name__in=device_names,
@@ -150,8 +150,32 @@ def api_get_clustered_data(request):
         timestamp__gte=datetime.datetime(year=2017, month=1, day=24, hour=20, minute=00),
     )
 
+    return filter_criteria
+
+
+def _build_excludes(request: HttpRequest):
+    exclude_criteria = dict()
+
+    exclude_criteria.update(
+        # In this period, the app was set to use `MediaRecorder.AudioSource.VOICE_RECOGNITION`
+        # which resulted in incorrect (too high) values.
+        timestamp__gte=datetime.datetime(year=2017, month=3, day=5, hour=0, minute=00),
+        timestamp__lte=datetime.datetime(year=2017, month=3, day=5, hour=23, minute=59),
+    )
+
+    return exclude_criteria
+
+
+@login_required
+def api_get_clustered_data(request):
+    resolution = dec.Decimal(request.GET['resolution'])
+    max_or_avg = request.GET['maxOrAvg']
+
+    filter_criteria = _build_filters(request)
+    exclude_criteria = _build_excludes(request)
+
     clustered = cluster_data(
-        Recording.objects.filter(**filter_criteria),
+        Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria),
         key_func=(lambda r: (r.lat, r.lon)),
         is_same_func=(lambda a, b: distance(a, b) < resolution),
         aggregator_factory=(lambda: GeoWeightedMiddle(extractor=(lambda r: (r.lat, r.lon, getattr(r, max_or_avg))))),
@@ -182,27 +206,13 @@ def api_get_clustered_data(request):
 
 @login_required
 def api_get_nonclustered_data(request):
-    device_names = request.GET.get('deviceNames', []).split('|')
     max_or_avg = request.GET['maxOrAvg']
 
-    filter_criteria = dict(
-        # lat__gt=float(request.GET['south']),
-        # lat__lt=float(request.GET['north']),
-        # lon__gt=float(request.GET['west']),
-        # lon__lt=float(request.GET['east']),
-    )
-
-    filter_criteria.update(
-        device_name__in=device_names,
-    )
-
-    filter_criteria.update(
-        # 2017-01-24 21:31:09
-        timestamp__gte=datetime.datetime(year=2017, month=1, day=24, hour=20, minute=00),
-    )
+    filter_criteria = _build_filters(request)
+    exclude_criteria = _build_excludes(request)
 
     clustered = cluster_data(
-        Recording.objects.filter(**filter_criteria),
+        Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria),
         key_func=(lambda r: (r.lat, r.lon)),
         is_same_func=(lambda a, b: False),
         aggregator_factory=(lambda: Averager(extractor=(lambda r: getattr(r, max_or_avg)))),

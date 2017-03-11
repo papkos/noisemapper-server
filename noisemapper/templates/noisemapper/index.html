@@ -8,7 +8,7 @@
     <style type="text/css">
 
         #map {
-            height: 500px;
+            height: 680px;
         }
 
     </style>
@@ -115,9 +115,10 @@
             var maxOrAvg = $('input[name=max_or_avg]:checked').val();
             var resolution = $('#resolution').val();
             var func = $('#func').val();
+            var isCropping = $('input[name=is_cropping]').is(':checked');
 
             var isClustering = $('input[name=is_clustering]').is(':checked');
-            
+
             var deviceNames = $('.device-name-container input:checked').map(function (idx, el) {
                 return $(el).data('deviceName');
             }).get().join('|');
@@ -127,6 +128,7 @@
                 resolution: resolution,
                 func: func,
                 deviceNames: deviceNames,
+                is_cropping: isCropping,
             };
             $.extend(data, bounds);
 
@@ -228,9 +230,11 @@
 {% endblock extra_js %}
 
 {% block content %}
-    <div class="container">
+    <div class="container-fluid">
         <div id="map"></div>
+    </div>
 
+    <div class="container">
         <div class="row ">
             <div class="btn-group device-name-container" data-toggle="buttons">
                 {% for device_name in device_name_list %}
@@ -250,6 +254,7 @@
             <label><input type="radio" class="reload-on-change" name="max_or_avg" value="measurement_max">MAX</label>
             <label><input type="radio" class="reload-on-change" name="max_or_avg" value="measurement_avg" checked>AVG</label>
             <label><input type="checkbox" class="reload-on-change" name="is_clustering" checked>Enable clustering</label>
+            <label><input type="checkbox" class="reload-on-change" name="is_cropping">Enable cropping</label>
         </div>
         <label>
             Aggregation function:

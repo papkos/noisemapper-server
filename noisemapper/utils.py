@@ -1,6 +1,7 @@
 import base64
 import datetime as dt
 import decimal as dec
+import json
 import logging
 from functools import wraps
 from typing import Callable, Iterable, Any, T, Tuple
@@ -216,4 +217,6 @@ def recording_to_json(recording: Recording) -> dict:
         avg=recording.measurement_avg,
         max=recording.measurement_max,
         device_name=recording.device_name,
+        timestamp=recording.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+        proximity=json.loads(recording.device_state).get('proximityText', ''),
     )
