@@ -188,14 +188,12 @@ class GeoWeightedMiddle(Aggregator):
         return self
 
     def get(self):
-        total_weight = sum(self.weights)
-
         avg_lat = avg_lon = 0
-        for loc, weight in zip(self.locations, self.weights):
-            avg_lat += loc[0] * weight
-            avg_lon += loc[1] * weight
-        avg_lat = avg_lat / total_weight
-        avg_lon = avg_lon / total_weight
+        for loc in self.locations:
+            avg_lat += loc[0]
+            avg_lon += loc[1]
+        avg_lat /= len(self.locations)
+        avg_lon /= len(self.locations)
         geo_mid = (avg_lat, avg_lon)
 
         avg_val = val_weights = 0
