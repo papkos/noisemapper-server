@@ -4,7 +4,7 @@ import decimal as dec
 import json
 import logging
 from functools import wraps
-from typing import Callable, Iterable, Any, T, Tuple
+from typing import Callable, Iterable, Any, T, Tuple, List, Optional
 
 import gpxpy.geo
 from django.conf import settings
@@ -113,7 +113,7 @@ class Aggregator(object):
     def __call__(self, new):
         raise NotImplementedError
 
-    def get(self) -> Tuple[Any, float]:
+    def get(self) -> Tuple[Any, float, Optional[List[dict]]]:
         raise NotImplementedError
 
 
@@ -135,11 +135,15 @@ def cluster_data(data: Iterable[T], key_func: Callable[[T], Any], is_same_func: 
         for x in values:
             aggregator(x)
 
-        new_key, new_value = aggregator.get()
+        new_key, new_value, extra_attrs = aggregator.get()
         if not new_key:
             # For simple aggregators that don't modify the key
             new_key = key
         if retain_original:
+            if extra_attrs:
+                for value, extra_attr in zip(values, extra_attrs):
+                    for k, v in extra_attr.items():
+                        setattr(value, k, v)
             clustered_2[new_key] = dict(original=values, aggregated_value=new_value)
         else:
             clustered_2[new_key] = new_value
@@ -171,7 +175,7 @@ class Averager(Aggregator):
         return self
 
     def get(self):
-        return None, dec.Decimal(self.sum) / dec.Decimal(self.count)
+        return None, dec.Decimal(self.sum) / dec.Decimal(self.count), None
 
 
 class GeoWeightedMiddle(Aggregator):
@@ -179,12 +183,12 @@ class GeoWeightedMiddle(Aggregator):
     def __init__(self, extractor):
         self.extractor = extractor
         self.locations = []  # (lat, lon)
-        self.weights = []
+        self.values = []
 
     def __call__(self, new):
-        lat, lon, weight = self.extractor(new)
+        lat, lon, value = self.extractor(new)
         self.locations.append((lat, lon))
-        self.weights.append(weight)
+        self.values.append(value)
         return self
 
     def get(self):
@@ -196,19 +200,22 @@ class GeoWeightedMiddle(Aggregator):
         avg_lon /= len(self.locations)
         geo_mid = (avg_lat, avg_lon)
 
-        avg_val = val_weights = 0
-        for loc, weight in zip(self.locations, self.weights):
+        avg_value = total_weight = 0
+        weights = []
+        for loc, value in zip(self.locations, self.values):
             dist = distance(geo_mid, loc)
             if dist == 0:
                 dist = 1
-            avg_val += weight * 1 / dist
-            val_weights += 1 / dist
-        avg_val /= val_weights
-        return geo_mid, avg_val
+            weight = 1 / dist
+            weights.append(weight)
+            avg_value += value * weight
+            total_weight += weight
+        avg_value /= total_weight
+        return geo_mid, avg_value, [{'weight': weight} for weight in weights]
 
 
 def recording_to_json(recording: Recording) -> dict:
-    return dict(
+    ret = dict(
         uuid=recording.uuid,
         lat=recording.lat,
         lon=recording.lon,
@@ -218,3 +225,8 @@ def recording_to_json(recording: Recording) -> dict:
         timestamp=recording.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
         proximity=json.loads(recording.device_state).get('proximityText', ''),
     )
+
+    if hasattr(recording, 'weight'):
+        ret.update(weight=getattr(recording, 'weight'))
+
+    return ret
