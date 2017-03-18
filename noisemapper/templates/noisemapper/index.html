@@ -118,10 +118,20 @@
             var isCropping = $('input[name=is_cropping]').is(':checked');
 
             var isClustering = $('input[name=is_clustering]').is(':checked');
+            if (!isClustering) { resolution = false; }
+
+            var dataType = $('#data_type').val();
 
             var deviceNames = $('.device-name-container input:checked').map(function (idx, el) {
                 return $(el).data('deviceName');
             }).get().join('|');
+
+            var url;
+            if (dataType == 'actual') {
+                url = '{% url 'api_get_actual_data' %}';
+            } else {
+                url = '{% url 'api_get_deviation_data' %}';
+            }
 
             var data = {
                 maxOrAvg: maxOrAvg,
@@ -131,13 +141,6 @@
                 is_cropping: isCropping,
             };
             $.extend(data, bounds);
-
-            var url;
-            if (isClustering) {
-                url = '{% url 'api_get_clustered_data' %}';
-            } else {
-                url = '{% url 'api_get_nonclustered_data' %}';
-            }
 
             $.ajax({
                 url: url,
@@ -158,7 +161,7 @@
                         };
                         heatmapData.push(weightedLoc);
                     });
-                    heatmap.setData({data: heatmapData, min: 1.9, max: 3.1});
+                    heatmap.setData({data: heatmapData, min: response.min-0.1, max: response.max+0.1});
                     $('#raw-data').text(JSON.stringify(response.data, null, 2));
                     currentRawData = response.data;
 
@@ -255,6 +258,13 @@
             <label><input type="radio" class="reload-on-change" name="max_or_avg" value="measurement_avg" checked>AVG</label>
             <label><input type="checkbox" class="reload-on-change" name="is_clustering" checked>Enable clustering</label>
             <label><input type="checkbox" class="reload-on-change" name="is_cropping">Enable cropping</label>
+            <label>
+                Data type:
+                <select class="reload-on-change"  id="data_type" name="data_type">
+                    <option value="actual">Actual values</option>
+                    <option value="deviation">Deviation from average</option>
+                </select>
+            </label>
         </div>
         <label>
             Aggregation function:

@@ -229,4 +229,7 @@ def recording_to_json(recording: Recording) -> dict:
     if hasattr(recording, 'weight'):
         ret.update(weight=getattr(recording, 'weight'))
 
+    if hasattr(recording, 'deviation'):
+        ret.update(deviation=getattr(recording, 'deviation'))
+
     return ret

@@ -8,14 +8,16 @@ from json import loads, dumps
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.db.models import Avg
+from django.db.models.expressions import F
 from django.http.request import HttpRequest
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
 
 from noisemapper.models.recording import Recording
-from noisemapper.utils import sjs, api_protect, cluster_data, distance, Averager, recording_to_json, GeoWeightedMiddle
+from noisemapper.utils import sjs, api_protect, cluster_data, distance, recording_to_json, GeoWeightedMiddle
 
 __all__ = ('api_upload_recording', 'api_upload_recording_batch',
-           'api_get_clustered_data', 'api_get_nonclustered_data',
+           'api_get_actual_data', 'api_get_deviation_from_average_data',
            'api_manual', 'api_echo')
 
 
@@ -64,6 +66,17 @@ def _get_device_name(request: HttpRequest) -> str:
         device_name = base64.b64decode(device_name).decode('utf-8')
 
     return device_name
+
+
+def _make_is_same(resolution):
+    try:
+        resolution = dec.Decimal(resolution)
+    except:
+        resolution = False
+    if resolution:
+        return lambda a, b: distance(a, b) < resolution
+    else:
+        return lambda a, b: False
 
 
 @api_protect
@@ -167,55 +180,49 @@ def _build_excludes(request: HttpRequest):
 
 
 @login_required
-def api_get_clustered_data(request):
-    resolution = dec.Decimal(request.GET['resolution'])
+def api_get_actual_data(request):
+    resolution = request.GET['resolution']
     max_or_avg = request.GET['maxOrAvg']
 
     filter_criteria = _build_filters(request)
     exclude_criteria = _build_excludes(request)
 
-    clustered = cluster_data(
-        Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria),
-        key_func=(lambda r: (r.lat, r.lon)),
-        is_same_func=(lambda a, b: distance(a, b) < resolution),
+    data = Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria)
+    return _common_prepare_response_data(
+        data,
+        is_same_func=_make_is_same(resolution),
         aggregator_factory=(lambda: GeoWeightedMiddle(extractor=(lambda r: (r.lat, r.lon, getattr(r, max_or_avg))))),
-        retain_original=True,
+        range=(2, 3),
     )
-    clustered = [
-        dict(
-            coordinates={'lat': key[0], 'lon': key[1]},
-            value=value['aggregated_value'],
-            original=[recording_to_json(x) for x in value['original']],
-        )
-        for key, value
-        in clustered.items()
-    ]
-
-    if len(clustered) > 0:
-        def setter(obj, val):
-            obj['display'] = val
-        map_values(clustered, 2, 3, lambda x: x['value'], setter)
-
-    data = dict(
-        success=True,
-        data=clustered,
-    )
-
-    return JsonResponse(data, json_dumps_params=dict(default=sjs))
 
 
 @login_required
-def api_get_nonclustered_data(request):
+def api_get_deviation_from_average_data(request):
+    resolution = request.GET['resolution']
     max_or_avg = request.GET['maxOrAvg']
 
     filter_criteria = _build_filters(request)
     exclude_criteria = _build_excludes(request)
+    queryset = Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria)
+    average_value = queryset.aggregate(average_value=Avg(max_or_avg))
+    average_value = average_value['average_value']
 
+    annotated = queryset.annotate(deviation=(F(max_or_avg) - average_value))
+
+    return _common_prepare_response_data(
+        annotated,
+        is_same_func=_make_is_same(resolution),
+        aggregator_factory=(lambda: GeoWeightedMiddle(extractor=(lambda r: (r.lat, r.lon, getattr(r, 'deviation'))))),
+        range=(-1, +1),
+    )
+
+
+def _common_prepare_response_data(data, is_same_func, aggregator_factory, range):
     clustered = cluster_data(
-        Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria),
+        data,
         key_func=(lambda r: (r.lat, r.lon)),
-        is_same_func=(lambda a, b: False),
-        aggregator_factory=(lambda: Averager(extractor=(lambda r: getattr(r, max_or_avg)))),
+        is_same_func=is_same_func,
+        aggregator_factory=aggregator_factory,
         retain_original=True,
     )
     clustered = [
@@ -228,16 +235,19 @@ def api_get_nonclustered_data(request):
         in clustered.items()
         ]
 
+    range_min, range_max = range
+
     if len(clustered) > 0:
         def setter(obj, val):
             obj['display'] = val
-        map_values(clustered, 2, 3, lambda x: x['value'], setter)
 
+        map_values(clustered, range_min, range_max, lambda x: x['value'], setter)
     data = dict(
         success=True,
         data=clustered,
+        min=range_min,
+        max=range_max,
     )
-
     return JsonResponse(data, json_dumps_params=dict(default=sjs))
 
 
