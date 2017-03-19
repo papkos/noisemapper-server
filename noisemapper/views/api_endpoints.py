@@ -4,6 +4,8 @@ import datetime as dt
 import decimal as dec
 import logging
 import os
+import shutil
+import tempfile
 from json import loads, dumps
 
 from django.conf import settings
@@ -18,6 +20,7 @@ from noisemapper.utils import sjs, api_protect, cluster_data, distance, recordin
 
 __all__ = ('api_upload_recording', 'api_upload_recording_batch',
            'api_get_actual_data', 'api_get_deviation_from_average_data',
+           'download_selection',
            'api_manual', 'api_echo')
 
 
@@ -159,8 +162,10 @@ def _build_filters(request: HttpRequest):
     )
 
     filter_criteria.update(
-        # 2017-01-24 21:31:09
-        timestamp__gte=datetime.datetime(year=2017, month=1, day=24, hour=20, minute=00),
+        # # 2017-01-24 21:31:09
+        # timestamp__gte=datetime.datetime(year=2017, month=1, day=24, hour=20, minute=00),
+        # 2017-03-19 10:10:00
+        timestamp__gte=datetime.datetime(year=2017, month=3, day=19, hour=10, minute=10),
     )
 
     return filter_criteria
@@ -249,6 +254,28 @@ def _common_prepare_response_data(data, is_same_func, aggregator_factory, range)
         max=range_max,
     )
     return JsonResponse(data, json_dumps_params=dict(default=sjs))
+
+
+@login_required
+def download_selection(request: HttpRequest):
+
+    filter_criteria = _build_filters(request)
+    exclude_criteria = _build_excludes(request)
+
+    data = Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria)
+
+    with tempfile.TemporaryFile() as tmpfile:
+        for recording in data:
+            full_filename = settings.FILENAME_PATTERN % recording.uuid
+            full_filename = os.path.join(settings.SNIPPET_STORAGE_DIR, full_filename)
+            with open(full_filename, 'rb') as infile:
+                shutil.copyfileobj(infile, tmpfile)
+
+        tmpfile.seek(0)
+        response = HttpResponse(tmpfile.read(), content_type='audio/pcm')
+
+    response['Content-Disposition'] = 'attachment; filename="merged.pcm"'
+    return response
 
 
 @login_required

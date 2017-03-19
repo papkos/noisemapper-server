@@ -142,6 +142,10 @@
             };
             $.extend(data, bounds);
 
+            var downloadUrl = $('#btn_download').data('baseHref');
+            downloadUrl += '?' + $.param(data);
+            $('#btn_download').attr('href', downloadUrl);
+
             $.ajax({
                 url: url,
                 type: 'GET',
@@ -248,6 +252,7 @@
                     </label>
                 {% endfor %}
             </div>
+        <a href="#" data-base-href="{% url 'api_download' %}" class="btn btn-link pull-right" id="btn_download">Download</a>
         </div>
 
         <button onclick="toggleDissipating()">Toggle Heatmap</button>

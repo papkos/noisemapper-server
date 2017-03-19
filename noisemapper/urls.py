@@ -11,6 +11,8 @@ urlpatterns = [
     url(r'^api/get_actual_data/$', views.api_get_actual_data, name='api_get_actual_data'),
     url(r'^api/get_deviation_data/$', views.api_get_deviation_from_average_data, name='api_get_deviation_data'),
 
+    url(r'^api/download/$', views.download_selection, name='api_download'),
+
     url(r'^api/manual', views.api_manual),
     url(r'^api/echo', views.api_echo),
 
