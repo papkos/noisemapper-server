@@ -31,7 +31,9 @@
         var map;
         var heatmap;
 
-        var oslo = {lat: 59.933955, lng: 10.713831};
+        const oslo = {lat: 59.933955, lng: 10.713831};
+        const heatmapPointRadius = 35;
+
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
                 zoom: 12,
@@ -50,7 +52,7 @@
 {#                    "radius": 0.0005,#}
                     // scales the radius based on map zoom
 {#                    "scaleRadius": true,#}
-                    "radius": 35,
+                    "radius": heatmapPointRadius,
                     "maxOpacity": 1,
                     // if set to false the heatmap uses the global maximum for colorization
                     // if activated: uses the data maximum within the current map boundaries
@@ -120,10 +122,16 @@
             var isClustering = $('input[name=is_clustering]').is(':checked');
             if (!isClustering) { resolution = false; }
 
+            var enableAutoResolution = $('input[name=is_auto_resolution]').is(':checked');
+
             var dataType = $('#data_type').val();
 
             var deviceNames = $('.device-name-container input:checked').map(function (idx, el) {
                 return $(el).data('deviceName');
+            }).get().join('|');
+
+            var micSources = $('.mic-source-container input:checked').map(function (idx, el) {
+                return $(el).data('micSource');
             }).get().join('|');
 
             var url;
@@ -133,11 +141,22 @@
                 url = '{% url 'api_get_deviation_data' %}';
             }
 
+            // Source: https://groups.google.com/d/msg/google-maps-js-api-v3/hDRO4oHVSeM/osOYQYXg2oUJ
+            // and http://gis.stackexchange.com/a/127949
+            var metersPerPixel = 156543.03392 * Math.cos(map.getCenter().lat() * Math.PI / 180) / Math.pow(2, map.getZoom());
+            if (enableAutoResolution) {
+                var factor = Number($('#auto_res_factor').val());
+                resolution = metersPerPixel * heatmapPointRadius * factor;
+                $('#resolution').val(resolution);
+            }
+
+
             var data = {
                 maxOrAvg: maxOrAvg,
                 resolution: resolution,
                 func: func,
                 deviceNames: deviceNames,
+                micSources: micSources,
                 is_cropping: isCropping,
             };
             $.extend(data, bounds);
@@ -183,7 +202,7 @@
             var latLon = {
                 lat: Number.parseFloat($this.data('lat')),
                 lng: Number.parseFloat($this.data('lon')),
-            }
+            };
 
             var marker = new google.maps.Marker({
                 position: latLon,
@@ -205,18 +224,13 @@
         }
 
         function clearMarkers() {
-            markers.forEach(function(marker) {marker.setMap(null); })
+            markers.forEach(function(marker) {marker.setMap(null); });
             markers = [];
         }
 
         var rawDataTable;
         var currentRawData;
         $(function() {
-            initMap();
-
-            $('.reload-on-change').on('change', function () {
-                reloadData();
-            });
 
             $('#rawDataTable').on('click', '.btn-add-marker', addMarker);
 
@@ -230,8 +244,17 @@
                     { data: 'original', render: function (data) { return data.length; }},
                     { data: 'original[, ].uuid',},
                 ]
-
             });
+
+            initMap();
+
+            $('.reload-on-change').on('change', function () {
+                reloadData();
+            });
+
+            $('input[name=is_auto_resolution]').on('change', function () {
+                $('#resolution').prop('disabled', $(this).is(':checked'));
+            }).trigger('change');
         });
     </script>
 {% endblock extra_js %}
@@ -243,12 +266,23 @@
 
     <div class="container">
         <div class="row ">
+            <label>Device name: </label>
             <div class="btn-group device-name-container" data-toggle="buttons">
                 {% for device_name in device_name_list %}
                     <label class="btn btn-default">
                         <input type="checkbox" autocomplete="off" class="reload-on-change"
                                data-device-name="{{ device_name }}">
                         {{ device_name }}
+                    </label>
+                {% endfor %}
+            </div>
+            <label>Mic source: </label>
+            <div class="btn-group mic-source-container" data-toggle="buttons">
+                {% for mic_source in mic_source_list %}
+                    <label class="btn btn-default">
+                        <input type="checkbox" autocomplete="off" class="reload-on-change"
+                               data-mic-source="{{ mic_source.0 }}">
+                        {{ mic_source.1 }}
                     </label>
                 {% endfor %}
             </div>
@@ -263,6 +297,7 @@
             <label><input type="radio" class="reload-on-change" name="max_or_avg" value="measurement_avg" checked>AVG</label>
             <label><input type="checkbox" class="reload-on-change" name="is_clustering" checked>Enable clustering</label>
             <label><input type="checkbox" class="reload-on-change" name="is_cropping">Enable cropping</label>
+            <label><input type="checkbox" class="reload-on-change" name="is_auto_resolution" checked>Enable auto resolution</label>
             <label>
                 Data type:
                 <select class="reload-on-change"  id="data_type" name="data_type">
@@ -279,7 +314,8 @@
                 <option value="max">MAX</option>
             </select>
         </label>
-        <label>Resolution: <input type="number" class="reload-on-change" id="resolution" value="100"/></label>
+        <label>Resolution: <input type="number" class="reload-on-change" id="resolution" value="100" disabled/></label>
+        <label>Auto resolution factor: <input type="number" class="reload-on-change" id="auto_res_factor" value="0.85"/></label>
         <button onclick="reloadData()">Reload data</button>
         <button onclick="clearMarkers()">Clear markers</button>
 

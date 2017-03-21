@@ -15,7 +15,7 @@ from django.db.models.expressions import F
 from django.http.request import HttpRequest
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
 
-from noisemapper.models.recording import Recording
+from noisemapper.models.recording import Recording, MIC_SOURCE_CHOICES
 from noisemapper.utils import sjs, api_protect, cluster_data, distance, recording_to_json, GeoWeightedMiddle
 
 __all__ = ('api_upload_recording', 'api_upload_recording_batch',
@@ -53,11 +53,16 @@ def _create_recording(json_data) -> Recording:
         recording.uuid = json_data['uuid']
 
     recording.timestamp = dt.datetime.strptime(json_data['timestamp'], '%Y-%m-%d %H:%M:%S')
+
     process_result = json_data['processResult']
     recording.process_result = dumps(process_result, default=sjs)
     recording.measurement_avg = process_result.get('avg', None)
     recording.measurement_max = process_result.get('max', None)
-    recording.device_state = dumps(json_data['state'], default=sjs)
+
+    device_state = json_data['state']
+    recording.device_state = dumps(device_state, default=sjs)
+    recording.mic_source = device_state.get('micSource', MIC_SOURCE_CHOICES[0][0])
+
     recording.lat = float(location['lat'])
     recording.lon = float(location['lon'])
     return recording
@@ -145,7 +150,8 @@ def map_values(values, lower, higher, getter, setter) -> None:
 
 
 def _build_filters(request: HttpRequest):
-    device_names = request.GET.get('deviceNames', []).split('|')
+    device_names = request.GET.get('deviceNames', '').split('|')
+    mic_sources = request.GET.get('micSources', '').split('|')
     is_cropping = request.GET['is_cropping'] == 'true'
 
     filter_criteria = dict()
@@ -162,10 +168,14 @@ def _build_filters(request: HttpRequest):
     )
 
     filter_criteria.update(
-        # # 2017-01-24 21:31:09
-        # timestamp__gte=datetime.datetime(year=2017, month=1, day=24, hour=20, minute=00),
-        # 2017-03-19 10:10:00
-        timestamp__gte=datetime.datetime(year=2017, month=3, day=19, hour=10, minute=10),
+        mic_source__in=mic_sources,
+    )
+
+    filter_criteria.update(
+        # 2017-01-24 21:31:09 -- ??
+        timestamp__gte=datetime.datetime(year=2017, month=1, day=24, hour=20, minute=00),
+        # # 2017-03-19 10:10:00 -- Started using a headset
+        # timestamp__gte=datetime.datetime(year=2017, month=3, day=19, hour=10, minute=10),
     )
 
     return filter_criteria

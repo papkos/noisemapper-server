@@ -3,6 +3,8 @@ from django.db import models
 
 from noisemapper.models.base import NoiseMapperBase
 
+MIC_SOURCE_CHOICES = [('internal', 'Internal'), ('headset', 'Headset')]
+
 __all__ = ('Recording',)
 
 
@@ -22,3 +24,5 @@ class Recording(NoiseMapperBase, models.Model):
 
     measurement_max = models.FloatField(blank=True, null=True)
     measurement_avg = models.FloatField(blank=True, null=True)
+
+    mic_source = models.CharField(choices=MIC_SOURCE_CHOICES, default=MIC_SOURCE_CHOICES[0][0], max_length=20)
