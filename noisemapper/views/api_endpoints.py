@@ -61,7 +61,7 @@ def _create_recording(json_data) -> Recording:
 
     device_state = json_data['state']
     recording.device_state = dumps(device_state, default=sjs)
-    recording.mic_source = device_state.get('micSource', MIC_SOURCE_CHOICES[0][0])
+    recording.mic_source = device_state.get('micSource', MIC_SOURCE_CHOICES[0][0]).lower()
 
     recording.lat = float(location['lat'])
     recording.lon = float(location['lon'])
