@@ -305,7 +305,10 @@
                     </label>
                 {% endfor %}
             </div>
-        <a href="#" data-base-href="{% url 'api_download' %}" class="btn btn-link pull-right" id="btn_download">Download</a>
+            {% if show_download %}
+                <a href="#" data-base-href="{% url 'api_download' %}"
+                   class="btn btn-link pull-right" id="btn_download">Download</a>
+            {% endif %}
         </div>
 
         <button onclick="toggleDissipating()">Toggle Heatmap</button>
