@@ -219,10 +219,13 @@ def api_get_deviation_from_average_data(request):
     filter_criteria = _build_filters(request)
     exclude_criteria = _build_excludes(request)
     queryset = Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria)
-    average_value = queryset.aggregate(average_value=Avg(max_or_avg))
-    average_value = average_value['average_value']
+    average_values = queryset.values('device_name').annotate(average_value=Avg(max_or_avg))
+    average_values = {x['device_name']: x['average_value'] for x in average_values}
 
-    annotated = queryset.annotate(deviation=(F(max_or_avg) - average_value))
+    annotated = []
+    for recording in queryset:
+        recording.deviation = getattr(recording, max_or_avg) - average_values[recording.device_name]
+        annotated.append(recording)
 
     return _common_prepare_response_data(
         annotated,

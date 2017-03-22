@@ -34,6 +34,10 @@
         const oslo = {lat: 59.933955, lng: 10.713831};
         const heatmapPointRadius = 35;
 
+        var debouncedReloadData = _.debounce(reloadData, 200);
+        var zoomChangedListener;
+        var boundsChangedListener;
+
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
                 zoom: 12,
@@ -68,7 +72,7 @@
             );
 
             // This will be triggered as soon as the maps shows up. No need to call `reloadData()` manually.
-            map.addListener('bounds_changed', _.debounce(reloadData, 200));
+            zoomChangedListener = map.addListener('zoom_changed', debouncedReloadData);
         }
 
         function toggleDissipating() {
@@ -112,7 +116,7 @@
             }
         }
 
-        var reloadData = function () {
+        function reloadData() {
             var bounds = map.getBounds().toJSON();
             var maxOrAvg = $('input[name=max_or_avg]:checked').val();
             var resolution = $('#resolution').val();
@@ -120,7 +124,9 @@
             var isCropping = $('input[name=is_cropping]').is(':checked');
 
             var isClustering = $('input[name=is_clustering]').is(':checked');
-            if (!isClustering) { resolution = false; }
+            if (!isClustering) {
+                resolution = false;
+            }
 
             var enableAutoResolution = $('input[name=is_auto_resolution]').is(':checked');
 
@@ -184,7 +190,7 @@
                         };
                         heatmapData.push(weightedLoc);
                     });
-                    heatmap.setData({data: heatmapData, min: response.min-0.1, max: response.max+0.1});
+                    heatmap.setData({data: heatmapData, min: response.min - 0.1, max: response.max + 0.1});
                     $('#raw-data').text(JSON.stringify(response.data, null, 2));
                     currentRawData = response.data;
 
@@ -194,7 +200,7 @@
                     handleErrorResponse(repsonse);
                 }
             });
-        };
+        }
 
         var markers = [];
         function addMarker() {
@@ -255,6 +261,19 @@
             $('input[name=is_auto_resolution]').on('change', function () {
                 $('#resolution').prop('disabled', $(this).is(':checked'));
             }).trigger('change');
+
+            $('input[name=is_cropping]').on('change', function () {
+                var isCropping = $(this).is(':checked');
+                if (isCropping) {
+                    google.maps.event.removeListener(zoomChangedListener);
+                    zoomChangedListener = null;
+                    boundsChangedListener = map.addListener('bounds_changed', debouncedReloadData);
+                } else {
+                    google.maps.event.removeListener(boundsChangedListener);
+                    boundsChangedListener = null;
+                    zoomChangedListener = map.addListener('zoom_changed', boundsChangedListener);
+                }
+            })
         });
     </script>
 {% endblock extra_js %}
