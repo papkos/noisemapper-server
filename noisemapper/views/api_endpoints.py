@@ -11,12 +11,12 @@ from json import loads, dumps
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import Avg
-from django.db.models.expressions import F
 from django.http.request import HttpRequest
 from django.http.response import HttpResponseNotAllowed, HttpResponse, JsonResponse
 
 from noisemapper.models.recording import Recording, MIC_SOURCE_CHOICES
-from noisemapper.utils import sjs, api_protect, cluster_data, distance, recording_to_json, GeoWeightedMiddle
+from noisemapper.utils import sjs, api_protect, cluster_data, distance, GeoWeightedMiddle, \
+    recording_to_json2
 
 __all__ = ('api_upload_recording', 'api_upload_recording_batch',
            'api_get_actual_data', 'api_get_deviation_from_average_data',
@@ -211,20 +211,30 @@ def api_get_actual_data(request):
     )
 
 
+def _get_group_by_from_dict(d: dict, group_by: tuple) -> tuple:
+    return tuple([d[key] for key in group_by])
+
+
+def _get_group_by_from_object(o: object, group_by: tuple) -> tuple:
+    return tuple([getattr(o, key) for key in group_by])
+
+
 @login_required
 def api_get_deviation_from_average_data(request):
     resolution = request.GET['resolution']
     max_or_avg = request.GET['maxOrAvg']
 
+    group_by = ('device_name', 'mic_source')
+
     filter_criteria = _build_filters(request)
     exclude_criteria = _build_excludes(request)
     queryset = Recording.objects.filter(**filter_criteria).exclude(**exclude_criteria)
-    average_values = queryset.values('device_name').annotate(average_value=Avg(max_or_avg))
-    average_values = {x['device_name']: x['average_value'] for x in average_values}
+    average_values = queryset.values(*group_by).annotate(average_value=Avg(max_or_avg))
+    average_values = {_get_group_by_from_dict(x, group_by): x['average_value'] for x in average_values}
 
     annotated = []
     for recording in queryset:
-        recording.deviation = getattr(recording, max_or_avg) - average_values[recording.device_name]
+        recording.deviation = getattr(recording, max_or_avg) - average_values[_get_group_by_from_object(recording, group_by)]
         annotated.append(recording)
 
     return _common_prepare_response_data(
@@ -247,7 +257,7 @@ def _common_prepare_response_data(data, is_same_func, aggregator_factory, range)
         dict(
             coordinates={'lat': key[0], 'lon': key[1]},
             value=value['aggregated_value'],
-            original=[recording_to_json(x) for x in value['original']],
+            original=[recording_to_json2(x) for x in value['original']],
         )
         for key, value
         in clustered.items()

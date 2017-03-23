@@ -3,6 +3,7 @@ import datetime as dt
 import decimal as dec
 import json
 import logging
+from collections import OrderedDict
 from functools import wraps
 from typing import Callable, Iterable, Any, T, Tuple, List, Optional
 
@@ -225,6 +226,25 @@ def recording_to_json(recording: Recording) -> dict:
         timestamp=recording.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
         proximity=json.loads(recording.device_state).get('proximityText', ''),
     )
+
+    if hasattr(recording, 'weight'):
+        ret.update(weight=getattr(recording, 'weight'))
+
+    if hasattr(recording, 'deviation'):
+        ret.update(deviation=getattr(recording, 'deviation'))
+
+    return ret
+
+
+def recording_to_json2(recording: Recording) -> dict:
+    ret = OrderedDict()
+    ret.update(timestamp=recording.timestamp.strftime('%Y-%m-%d %H:%M:%S'))
+    ret.update(uuid=recording.uuid)
+    ret.update(avg=recording.measurement_avg)
+    ret.update(max=recording.measurement_max)
+    ret.update(device_name=recording.device_name)
+    ret.update(mic_source=recording.mic_source)
+    ret.update(proximity=json.loads(recording.device_state).get('proximityText', ''))
 
     if hasattr(recording, 'weight'):
         ret.update(weight=getattr(recording, 'weight'))
